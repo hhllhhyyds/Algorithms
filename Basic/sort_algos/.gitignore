@@ -1,0 +1,21 @@
+# Ignore compiled binary files
+/target/
+
+# Ignore IDE or editor files
+/.vscode/
+/.idea/
+*.rs.bk
+
+# Ignore Cargo.lock file
+Cargo.lock
+
+# Ignore build artifacts
+*.rs.bk
+*.rlib
+*.d
+*.dSYM/
+
+# Ignore output directories
+/target/
+/dist/
+/build/
