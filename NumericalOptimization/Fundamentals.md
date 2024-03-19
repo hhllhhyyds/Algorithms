@@ -36,7 +36,7 @@ $$f(x+p) = f(x) + \nabla f(x)^T p + \frac{1}{2}p^T \nabla^2 f(x+tp)p$$
 
 ### 两类迭代策略
 
-1. 线性搜索
+1. 线搜索
     在第 k 步，用某种办法选出一个方向向量 $p$，然后去求解一个合适的步长 $\alpha$, 求得 $\min_{\alpha > 0} f(x_k + \alpha p_k)$
 2. 置信区间
     在第 k 步，构造一个 model function $m_k$, 选定 $x_k$ 的一个邻域 $\Delta$ 为置信区间，找到一个向量 $p; p+x_k \in \Delta$ 满足 $min_{\Delta}m_k(x_k+p)$
@@ -44,9 +44,9 @@ $$f(x+p) = f(x) + \nabla f(x)^T p + \frac{1}{2}p^T \nabla^2 f(x+tp)p$$
     model 函数通常为二次函数形式
     $$m_k(x_k + p) = f_k + p^T \nabla f_k + \frac{1}{2} p^T B_k p$$
 
-线性搜索的搜索方向 $p_k$ 的选择方式与置信区间方法中黑塞矩阵 $B_k$ 的选择有很密切的关系。
+线搜索的搜索方向 $p_k$ 的选择方式与置信区间方法中黑塞矩阵 $B_k$ 的选择有很密切的关系。
 
-线性搜索中最直观的搜索方向是最速下降方向 $p_k = -\nabla f(x_k)$, 这种情况下步长 $\alpha$ 的选择可以有多种方法。
+线搜索中最直观的搜索方向是最速下降方向 $p_k = -\nabla f(x_k)$, 这种情况下步长 $\alpha$ 的选择可以有多种方法。
 
 另一种重要的搜索方向是牛顿方向，model 函数取为
 $$m_k(p) = f_k + p^T \nabla f_k + \frac{1}{2} p^T \nabla^2 f_k p$$
@@ -54,7 +54,7 @@ $$m_k(p) = f_k + p^T \nabla f_k + \frac{1}{2} p^T \nabla^2 f_k p$$
 令 $m_k(p)$ 的梯度为 0 求得 
 $$p_k^N = -(\nabla^2 f_k)^{-1}\nabla f_k$$
 
-当 $\nabla^2 f_k$ 正定时，牛顿方向 $p_k^N$ 可以被选为线性搜索的搜索方向，因为 
+当 $\nabla^2 f_k$ 正定时，牛顿方向 $p_k^N$ 可以被选为线搜索的搜索方向，因为 
  
 $$\nabla f_k^T p_k^N = -{p_k^N}^T \nabla^2 f_k p_k^N < 0$$
 
