@@ -56,3 +56,27 @@ $\text{end(repeat)}$
 * 牛顿和准牛顿法中，$\alpha_0$ 选为 $1$，但在共轭梯度或最速下降法中可以是其他值
 * 在实践中，每次迭代中的 $\rho$ 可变，但要保证 $0 < \rho_{lo} < \rho < \rho_{hi} < 1$
 * 适用于牛顿法，不太适用于准牛顿法和共轭梯度法
+
+## 线搜索方向的收敛性
+
+* 最速下降方向 $-\nabla f_k$
+* 搜索方向与最速下降方向的夹角
+    $$\cos{\theta_k} = \frac{-\nabla f_k^T p_k}{||\nabla f_k||\cdot||p_k||}$$
+
+### Zoutendijk 条件
+
+如果 $p_k$ 是下降方向，$\alpha_k$ 满足 Wolfe 条件，$f$ 的梯度满足李普希茨连续，则
+$$\sum_{k>0} \cos^2 \theta_k ||\nabla f_k||^2 < \infty$$
+即
+$$\cos^2\theta_k||\nabla f_k||^2 \to 0$$
+如果保证 $\theta_k > \delta > 0$, 如最速下降法, 则可以保证梯度收敛到 $0$
+
+考虑准牛顿方法的矩阵有个有限的条件数，且正定
+$$||B_k||||B_k^{-1}||\leq M$$
+容易得到
+$$\cos\theta_k \geq 1/M$$
+则梯度收敛
+
+### 最速下降的收敛性
+
+
