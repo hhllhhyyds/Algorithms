@@ -35,7 +35,7 @@ impl<T> Stack<T> for SingleLinkedList<T> {
     }
 
     fn size(&self) -> usize {
-        self.iter().count()
+        self.len()
     }
 
     fn new() -> Self {

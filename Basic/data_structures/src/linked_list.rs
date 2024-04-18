@@ -57,6 +57,14 @@ impl<T> SingleLinkedList<T> {
             }
         }
     }
+
+    pub fn len(&self) -> usize {
+        self.iter().count()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.head.is_none()
+    }
 }
 
 impl<T> Default for SingleLinkedList<T> {

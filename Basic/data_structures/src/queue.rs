@@ -39,7 +39,7 @@ impl<T> Queue<T> for SingleLinkedList<T> {
     }
 
     fn size(&self) -> usize {
-        self.iter().count()
+        self.len()
     }
 
     fn new() -> Self {
