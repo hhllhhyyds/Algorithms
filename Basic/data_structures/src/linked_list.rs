@@ -16,8 +16,46 @@ impl<T> SingleLinkedList<T> {
         Self { head: None }
     }
 
-    fn iter(&self) -> Iter<'_, T> {
+    pub fn iter(&self) -> Iter<'_, T> {
         Iter(self)
+    }
+
+    pub fn push_head(&mut self, x: T) {
+        let head = Box::new(SingleLinkedNode {
+            value: x,
+            next: SingleLinkedList {
+                head: self.head.take(),
+            },
+        });
+
+        self.head = Some(head);
+    }
+
+    pub fn pop_head(&mut self) -> Option<T> {
+        let head = self.head.take()?;
+        let (list, x) = (head.next, head.value);
+        *self = list;
+        Some(x)
+    }
+
+    pub fn push_tail(&mut self, x: T) {
+        let tail = Some(Box::new(SingleLinkedNode {
+            value: x,
+            next: SingleLinkedList { head: None },
+        }));
+
+        let mut last = &mut self.head;
+
+        loop {
+            if last.is_none() {
+                *last = tail;
+                break;
+            } else {
+                unsafe {
+                    last = &mut last.as_mut().unwrap_unchecked().next.head;
+                }
+            }
+        }
     }
 }
 
@@ -50,24 +88,6 @@ impl<T: PartialEq> SingleLinkedList<T> {
             }
         }
         None
-    }
-
-    pub fn push_head(&mut self, x: T) {
-        let head = Box::new(SingleLinkedNode {
-            value: x,
-            next: SingleLinkedList {
-                head: self.head.take(),
-            },
-        });
-
-        self.head = Some(head);
-    }
-
-    pub fn pop_head(&mut self) -> Option<T> {
-        let head = self.head.take()?;
-        let (list, x) = (head.next, head.value);
-        *self = list;
-        Some(x)
     }
 
     pub fn pop_match(&mut self, x: &T) -> Option<T> {
@@ -113,7 +133,7 @@ impl<T: Display> Display for SingleLinkedList<T> {
     }
 }
 
-struct Iter<'a, T>(&'a SingleLinkedList<T>);
+pub struct Iter<'a, T>(&'a SingleLinkedList<T>);
 
 impl<'a, T> Iterator for Iter<'a, T> {
     type Item = &'a SingleLinkedNode<T>;
@@ -163,6 +183,12 @@ mod tests {
         let x = list.pop_match(&2);
         assert!(list.find(&2).is_none());
         assert!(x.unwrap() == 2);
+
+        println!("List is {list}");
+
+        for i in 6..10 {
+            list.push_tail(i);
+        }
 
         println!("List is {list}");
     }
