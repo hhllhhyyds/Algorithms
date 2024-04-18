@@ -1,5 +1,3 @@
-// use std::ops::DerefMut;
-
 use std::fmt::Display;
 
 #[derive(Debug)]
@@ -10,21 +8,17 @@ pub struct SingleLinkedNode<T> {
 
 #[derive(Debug)]
 pub struct SingleLinkedList<T> {
-    node: Option<Box<SingleLinkedNode<T>>>,
+    head: Option<Box<SingleLinkedNode<T>>>,
 }
 
 impl<T> SingleLinkedList<T> {
     pub fn new() -> Self {
-        Self { node: None }
+        Self { head: None }
     }
 
     fn iter(&self) -> Iter<'_, T> {
         Iter(self)
     }
-
-    // fn iter_mut(&mut self) -> IterMut<'_, T> {
-    //     IterMut(self)
-    // }
 }
 
 impl<T> Default for SingleLinkedList<T> {
@@ -35,68 +29,66 @@ impl<T> Default for SingleLinkedList<T> {
 
 impl<T: PartialEq> SingleLinkedList<T> {
     pub fn find(&self, x: &T) -> Option<&SingleLinkedNode<T>> {
-        match &self.node {
-            Some(node) => {
-                if node.value.eq(x) {
-                    Some(node)
-                } else {
-                    node.next.find(x)
-                }
+        let mut head = &self.head;
+        while let Some(node) = head {
+            if node.value.eq(x) {
+                return Some(node);
+            } else {
+                head = &node.next.head;
             }
-            None => None,
         }
+        None
     }
 
     pub fn find_mut(&mut self, x: &T) -> Option<&mut SingleLinkedNode<T>> {
-        match &mut self.node {
-            Some(node) => {
-                if node.value.eq(x) {
-                    Some(node)
-                } else {
-                    node.next.find_mut(x)
-                }
+        let mut head = &mut self.head;
+        while let Some(node) = head {
+            if node.value.eq(x) {
+                return Some(node);
+            } else {
+                head = &mut node.next.head;
             }
-            None => None,
         }
+        None
     }
 
     pub fn push_head(&mut self, x: T) {
-        let head_node = Box::new(SingleLinkedNode {
+        let head = Box::new(SingleLinkedNode {
             value: x,
             next: SingleLinkedList {
-                node: self.node.take(),
+                head: self.head.take(),
             },
         });
 
-        self.node = Some(head_node);
+        self.head = Some(head);
     }
 
     pub fn pop_head(&mut self) -> Option<T> {
-        self.node.as_ref()?;
-
-        let node = self.node.take().unwrap();
-        let (list, x) = (node.next, node.value);
+        let head = self.head.take()?;
+        let (list, x) = (head.next, head.value);
         *self = list;
         Some(x)
     }
 
-    pub fn delete(&mut self, x: &T) {
-        if self.node.is_none() {
-            return;
-        }
+    pub fn pop_match(&mut self, x: &T) -> Option<T> {
+        if self.head.is_some() {
+            let mut list = self;
 
-        let mut list = self;
-
-        while list.node.is_some() {
-            if list.node.as_ref().unwrap().value.ne(x) {
-                list = &mut list.node.as_mut().unwrap().next;
-            } else {
-                let node = list.node.take().unwrap();
-                let (_, left_list) = (node.value, node.next);
-                *list = left_list;
-                break;
+            while list.head.is_some() {
+                unsafe {
+                    if list.head.as_ref().unwrap_unchecked().value.ne(x) {
+                        list = &mut list.head.as_mut().unwrap_unchecked().next;
+                    } else {
+                        let node = list.head.take().unwrap_unchecked();
+                        let (x, left_list) = (node.value, node.next);
+                        *list = left_list;
+                        return Some(x);
+                    }
+                }
             }
         }
+
+        None
     }
 }
 
@@ -111,7 +103,9 @@ impl<T: Display> Display for SingleLinkedList<T> {
         write!(f, "SingleLinkedList [")?;
         for node in self.iter() {
             node.fmt(f)?;
-            write!(f, ", ")?;
+            if node.next.head.is_some() {
+                write!(f, ", ")?;
+            }
         }
         write!(f, "]")?;
 
@@ -121,27 +115,16 @@ impl<T: Display> Display for SingleLinkedList<T> {
 
 struct Iter<'a, T>(&'a SingleLinkedList<T>);
 
-// struct IterMut<'a, T>(&'a mut SingleLinkedList<T>);
-
 impl<'a, T> Iterator for Iter<'a, T> {
     type Item = &'a SingleLinkedNode<T>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.0.node.as_ref().map(|node| {
-            let ret = node.as_ref();
+        self.0.head.as_ref().map(|node| {
             self.0 = &node.next;
-            ret
+            node.as_ref()
         })
     }
 }
-
-// impl<'a, T> Iterator for IterMut<'a, T> {
-//     type Item = &'a mut SingleLinkedNode<T>;
-
-//     fn next(&mut self) -> Option<Self::Item> {
-//         self.0 .0.as_mut().take().map(move |node| node.as_mut())
-//     }
-// }
 
 #[cfg(test)]
 mod tests {
@@ -177,8 +160,9 @@ mod tests {
         println!("List is {list}");
 
         assert!(list.find(&2).is_some());
-        list.delete(&2);
+        let x = list.pop_match(&2);
         assert!(list.find(&2).is_none());
+        assert!(x.unwrap() == 2);
 
         println!("List is {list}");
     }
