@@ -6,6 +6,15 @@ pub struct SingleLinkedNode<T> {
     next: SingleLinkedList<T>,
 }
 
+impl<T> SingleLinkedNode<T> {
+    pub fn new(x: T) -> Self {
+        Self {
+            value: x,
+            next: SingleLinkedList::default(),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct SingleLinkedList<T> {
     head: Option<Box<SingleLinkedNode<T>>>,
@@ -20,50 +29,66 @@ impl<T> SingleLinkedList<T> {
         Iter(self)
     }
 
-    pub fn push_head(&mut self, x: T) {
-        let head = Box::new(SingleLinkedNode {
-            value: x,
-            next: SingleLinkedList {
-                head: self.head.take(),
-            },
-        });
-
-        self.head = Some(head);
-    }
-
-    pub fn pop_head(&mut self) -> Option<T> {
-        let head = self.head.take()?;
-        let (list, x) = (head.next, head.value);
-        *self = list;
-        Some(x)
-    }
-
-    pub fn push_tail(&mut self, x: T) {
-        let tail = Some(Box::new(SingleLinkedNode {
-            value: x,
-            next: SingleLinkedList { head: None },
-        }));
-
-        let mut last = &mut self.head;
-
-        loop {
-            if last.is_none() {
-                *last = tail;
-                break;
-            } else {
-                unsafe {
-                    last = &mut last.as_mut().unwrap_unchecked().next.head;
-                }
-            }
-        }
-    }
-
     pub fn len(&self) -> usize {
         self.iter().count()
     }
 
     pub fn is_empty(&self) -> bool {
         self.head.is_none()
+    }
+
+    pub fn split(node: &mut SingleLinkedNode<T>) -> SingleLinkedList<T> {
+        std::mem::take(&mut node.next)
+    }
+
+    pub fn concat(node: &mut SingleLinkedNode<T>, list: SingleLinkedList<T>) {
+        assert!(std::mem::replace(&mut node.next, list).is_empty())
+    }
+
+    pub fn push_head(&mut self, x: T) {
+        let mut node = Box::new(SingleLinkedNode::new(x));
+        Self::concat(&mut node, std::mem::take(self));
+        self.head = Some(node)
+    }
+
+    pub fn pop_head(&mut self) -> Option<T> {
+        let head = self.head.take();
+        head.map(|node| {
+            let (value, list) = (node.value, node.next);
+            *self = list;
+            value
+        })
+    }
+
+    pub fn push_tail(&mut self, x: T) {
+        let tail = SingleLinkedList {
+            head: Some(Box::new(SingleLinkedNode::new(x))),
+        };
+
+        let mut list = self;
+        loop {
+            if list.is_empty() {
+                *list = tail;
+                break;
+            } else {
+                unsafe {
+                    list = &mut list.head.as_mut().unwrap_unchecked().next;
+                }
+            }
+        }
+    }
+
+    pub fn insert_after(node: &mut SingleLinkedNode<T>, x: T) {
+        let mut list = Self::split(node);
+        list.push_head(x);
+        Self::concat(node, list);
+    }
+
+    pub fn pop_after(node: &mut SingleLinkedNode<T>) -> Option<T> {
+        let mut list = Self::split(node);
+        let value = list.pop_head();
+        Self::concat(node, list);
+        value
     }
 }
 
@@ -99,19 +124,17 @@ impl<T: PartialEq> SingleLinkedList<T> {
     }
 
     pub fn pop_match(&mut self, x: &T) -> Option<T> {
-        if self.head.is_some() {
-            let mut list = self;
+        let mut list = self;
 
-            while list.head.is_some() {
-                unsafe {
-                    if list.head.as_ref().unwrap_unchecked().value.ne(x) {
-                        list = &mut list.head.as_mut().unwrap_unchecked().next;
-                    } else {
-                        let node = list.head.take().unwrap_unchecked();
-                        let (x, left_list) = (node.value, node.next);
-                        *list = left_list;
-                        return Some(x);
-                    }
+        while list.head.is_some() {
+            unsafe {
+                if list.head.as_ref().unwrap_unchecked().value.ne(x) {
+                    list = &mut list.head.as_mut().unwrap_unchecked().next;
+                } else {
+                    let node = list.head.take().unwrap_unchecked();
+                    let (x, tail) = (node.value, node.next);
+                    *list = tail;
+                    return Some(x);
                 }
             }
         }
