@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 #[derive(Debug)]
 pub struct SingleLinkedNode<T> {
-    value: T,
+    pub value: T,
     next: SingleLinkedList<T>,
 }
 
@@ -174,53 +174,5 @@ impl<'a, T> Iterator for Iter<'a, T> {
             self.0 = &node.next;
             node.as_ref()
         })
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test1() {
-        let mut list = SingleLinkedList::new();
-
-        for i in 0..10 {
-            list.push_head(i);
-        }
-
-        println!("List is {list}");
-
-        for _ in 0..4 {
-            list.pop_head();
-        }
-
-        println!("List is {list}");
-
-        assert!(list.find(&3).is_some());
-        assert!(list.find(&3).unwrap().value == 3);
-
-        assert!(list.find(&6).is_none());
-
-        assert!(list.find_mut(&3).is_some());
-        assert!({
-            list.find_mut(&3).unwrap().value = 100;
-            list.find(&100).is_some() && list.find(&3).is_none()
-        });
-
-        println!("List is {list}");
-
-        assert!(list.find(&2).is_some());
-        let x = list.pop_match(&2);
-        assert!(list.find(&2).is_none());
-        assert!(x.unwrap() == 2);
-
-        println!("List is {list}");
-
-        for i in 6..10 {
-            list.push_tail(i);
-        }
-
-        println!("List is {list}");
     }
 }
