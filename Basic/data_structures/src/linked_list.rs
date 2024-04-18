@@ -42,7 +42,7 @@ impl<T> SingleLinkedList<T> {
     }
 
     pub fn concat(node: &mut SingleLinkedNode<T>, list: SingleLinkedList<T>) {
-        assert!(std::mem::replace(&mut node.next, list).is_empty())
+        debug_assert!(std::mem::replace(&mut node.next, list).is_empty())
     }
 
     pub fn push_head(&mut self, x: T) {
