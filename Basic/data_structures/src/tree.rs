@@ -4,13 +4,14 @@ use std::{
     rc::{Rc, Weak},
 };
 
+use crate::queue::Queue;
+
 #[derive(Debug)]
 pub struct TreeNode<T> {
     pub value: T,
-    #[allow(dead_code)]
-    parent: Weak<RefCell<TreeNode<T>>>,
-    left: BinaryTree<T>,
-    right: BinaryTree<T>,
+    pub parent: Weak<RefCell<TreeNode<T>>>,
+    pub left: BinaryTree<T>,
+    pub right: BinaryTree<T>,
 }
 
 impl<T> TreeNode<T> {
@@ -39,7 +40,7 @@ impl<T> TreeNode<T> {
 
 #[derive(Debug)]
 pub struct BinaryTree<T> {
-    root: Option<Rc<RefCell<TreeNode<T>>>>,
+    pub root: Option<Rc<RefCell<TreeNode<T>>>>,
 }
 
 impl<T> Default for BinaryTree<T> {
@@ -55,6 +56,34 @@ impl<T> BinaryTree<T> {
 
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn iter(&self) -> Iter<T> {
+        fn enqueue<T>(queue: &mut Vec<Rc<RefCell<TreeNode<T>>>>, tree: &BinaryTree<T>) {
+            if !tree.is_empty() {
+                unsafe {
+                    enqueue(
+                        queue,
+                        &tree.root.as_ref().unwrap_unchecked().as_ref().borrow().left,
+                    );
+                    Queue::enqueue(queue, tree.root.as_ref().unwrap_unchecked().clone());
+                    enqueue(
+                        queue,
+                        &tree
+                            .root
+                            .as_ref()
+                            .unwrap_unchecked()
+                            .as_ref()
+                            .borrow()
+                            .right,
+                    );
+                }
+            }
+        }
+        let mut queue = Vec::new();
+        enqueue(&mut queue, self);
+
+        Iter(queue)
     }
 }
 
@@ -120,6 +149,56 @@ impl<T: PartialEq + PartialOrd> BinaryTree<T> {
             }
         }
     }
+
+    pub fn min(&self) -> Option<Rc<RefCell<TreeNode<T>>>> {
+        if self.is_empty() {
+            None
+        } else {
+            unsafe {
+                let mut cursor = self.root.as_ref().unwrap_unchecked().clone();
+                loop {
+                    if cursor.borrow().left.is_empty() {
+                        return Some(cursor.clone());
+                    } else {
+                        let next = cursor
+                            .as_ref()
+                            .borrow()
+                            .left
+                            .root
+                            .as_ref()
+                            .unwrap_unchecked()
+                            .clone();
+                        cursor = next;
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn max(&self) -> Option<Rc<RefCell<TreeNode<T>>>> {
+        if self.is_empty() {
+            None
+        } else {
+            unsafe {
+                let mut cursor = self.root.as_ref().unwrap_unchecked().clone();
+                loop {
+                    if cursor.borrow().right.is_empty() {
+                        return Some(cursor.clone());
+                    } else {
+                        let next = cursor
+                            .as_ref()
+                            .borrow()
+                            .right
+                            .root
+                            .as_ref()
+                            .unwrap_unchecked()
+                            .clone();
+                        cursor = next;
+                    }
+                }
+            }
+        }
+    }
 }
 
 fn fmt_with_count<T: Display>(
@@ -177,5 +256,15 @@ fn fmt_with_count<T: Display>(
 impl<T: Display> Display for BinaryTree<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         fmt_with_count(self, f, 0)
+    }
+}
+
+pub struct Iter<T>(Vec<Rc<RefCell<TreeNode<T>>>>);
+
+impl<T> Iterator for Iter<T> {
+    type Item = Rc<RefCell<TreeNode<T>>>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        Queue::dequeue(&mut self.0)
     }
 }
