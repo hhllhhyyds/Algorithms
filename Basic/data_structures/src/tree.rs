@@ -22,6 +22,19 @@ impl<T> TreeNode<T> {
             right: BinaryTree::default(),
         }
     }
+
+    pub fn new_leaf(x: T, parent: Weak<RefCell<TreeNode<T>>>) -> Self {
+        Self {
+            value: x,
+            parent,
+            left: BinaryTree::default(),
+            right: BinaryTree::default(),
+        }
+    }
+
+    pub fn to_root(self) -> Option<Rc<RefCell<Self>>> {
+        Some(Rc::new(RefCell::new(self)))
+    }
 }
 
 #[derive(Debug)]
@@ -47,35 +60,41 @@ impl<T> BinaryTree<T> {
 
 impl<T: PartialEq + PartialOrd> BinaryTree<T> {
     pub fn insert(&mut self, x: T) {
-        self.insert_under_parent(x, Weak::new());
-    }
-
-    fn insert_under_parent(&mut self, x: T, parent: Weak<RefCell<TreeNode<T>>>) {
-        // TODO: use loop instead of recursion
         if self.is_empty() {
-            self.root = Some(Rc::new(RefCell::new(TreeNode {
-                value: x,
-                parent,
-                left: BinaryTree::default(),
-                right: BinaryTree::default(),
-            })));
+            self.root = TreeNode::new(x).to_root();
         } else {
             unsafe {
-                let parent = Rc::downgrade(self.root.as_ref().unwrap_unchecked());
-                if x < self.root.as_ref().unwrap_unchecked().borrow().value {
-                    self.root
-                        .as_mut()
-                        .unwrap_unchecked()
-                        .borrow_mut()
-                        .left
-                        .insert_under_parent(x, parent);
-                } else {
-                    self.root
-                        .as_mut()
-                        .unwrap_unchecked()
-                        .borrow_mut()
-                        .right
-                        .insert_under_parent(x, parent);
+                let mut cursor = self.root.as_ref().unwrap_unchecked().clone();
+                loop {
+                    if x < cursor.borrow().value {
+                        if cursor.borrow().left.is_empty() {
+                            cursor.borrow_mut().left.root =
+                                TreeNode::new_leaf(x, Rc::downgrade(&cursor)).to_root();
+                            return;
+                        } else {
+                            let next = cursor
+                                .borrow()
+                                .left
+                                .root
+                                .as_ref()
+                                .unwrap_unchecked()
+                                .clone();
+                            cursor = next;
+                        }
+                    } else if cursor.borrow().right.is_empty() {
+                        cursor.borrow_mut().right.root =
+                            TreeNode::new_leaf(x, Rc::downgrade(&cursor)).to_root();
+                        return;
+                    } else {
+                        let next = cursor
+                            .borrow()
+                            .right
+                            .root
+                            .as_ref()
+                            .unwrap_unchecked()
+                            .clone();
+                        cursor = next;
+                    }
                 }
             }
         }
