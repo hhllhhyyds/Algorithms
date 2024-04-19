@@ -99,6 +99,27 @@ impl<T: PartialEq + PartialOrd> BinaryTree<T> {
             }
         }
     }
+
+    pub fn find(&self, x: &T) -> Option<Rc<RefCell<TreeNode<T>>>> {
+        if self.is_empty() {
+            None
+        } else {
+            unsafe {
+                let cursor = self.root.as_ref().unwrap_unchecked();
+                if cursor.borrow().value.eq(x) {
+                    Some(cursor.clone())
+                } else {
+                    let left_ret = cursor.borrow().left.find(x);
+                    let right_ret = cursor.borrow().right.find(x);
+                    if left_ret.is_some() {
+                        left_ret
+                    } else {
+                        right_ret
+                    }
+                }
+            }
+        }
+    }
 }
 
 fn fmt_with_count<T: Display>(
