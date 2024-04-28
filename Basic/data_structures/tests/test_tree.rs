@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use data_structures::tree::BinaryTree;
 
 use rand::Rng;
@@ -96,7 +98,7 @@ fn verify_tree_order<T: PartialEq + PartialOrd>(tree: &BinaryTree<T>) {
             }
         }
     }
-    assert!(root_count == 1);
+    assert!(root_count == if tree.is_empty() { 0 } else { 1 });
 }
 
 #[test]
@@ -112,4 +114,38 @@ fn test_weak_to_parent() {
     }
 
     verify_tree_order(&tree);
+}
+
+#[test]
+fn test_remove() {
+    let mut rng = rand::thread_rng();
+
+    let input = (0..7000)
+        .map(|_| rng.gen_range(0..1000))
+        .collect::<HashSet<_>>();
+    let mut len = input.len();
+    println!("set length = {}, set = {:?}", len, input);
+
+    let mut tree = BinaryTree::new();
+
+    for x in &input {
+        tree.insert(*x);
+    }
+
+    for x in input {
+        {
+            println!("x to be removed = {x}");
+            let node = tree.find(&x).unwrap();
+            tree.remove(node);
+            len -= 1;
+        }
+        assert!(
+            tree.iter().count() == len,
+            "{} != {}",
+            tree.iter().count(),
+            len
+        );
+        assert!(tree.find(&x).is_none());
+        verify_tree_order(&tree);
+    }
 }

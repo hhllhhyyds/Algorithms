@@ -38,6 +38,12 @@ impl<T> TreeNode<T> {
     }
 }
 
+impl<T: PartialEq + PartialOrd> TreeNode<T> {
+    pub fn left_to(&self, node: &TreeNode<T>) -> bool {
+        self.value.lt(&node.value)
+    }
+}
+
 #[derive(Debug)]
 pub struct BinaryTree<T> {
     pub root: Option<Rc<RefCell<TreeNode<T>>>>,
@@ -56,6 +62,10 @@ impl<T> BinaryTree<T> {
 
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn clean(&mut self) {
+        self.root.take();
     }
 
     pub fn iter(&self) -> Iter<T> {
@@ -127,6 +137,80 @@ impl<T: PartialEq + PartialOrd> BinaryTree<T> {
                 }
             }
         }
+    }
+
+    pub fn remove(&mut self, node: Rc<RefCell<TreeNode<T>>>) {
+        if node.borrow().left.is_empty() {
+            if node.borrow().right.is_empty() {
+                if node.borrow().parent.upgrade().is_some() {
+                    let parent = node.borrow().parent.upgrade().unwrap();
+                    if node.borrow().left_to(&parent.borrow()) {
+                        parent.borrow_mut().left.clean();
+                    } else {
+                        parent.borrow_mut().right.clean();
+                    }
+                } else {
+                    self.clean();
+                }
+            } else {
+                let right_node = node.borrow_mut().right.root.take().unwrap();
+                if let Some(parent) = node.borrow().parent.upgrade() {
+                    right_node.borrow_mut().parent = Rc::downgrade(&parent);
+                    if node.borrow().left_to(&parent.borrow()) {
+                        parent.borrow_mut().left.root = Some(right_node);
+                    } else {
+                        parent.borrow_mut().right.root = Some(right_node);
+                    }
+                } else {
+                    right_node.borrow_mut().parent = Weak::new();
+                    self.root = Some(right_node);
+                }
+            }
+        } else if node.borrow().right.is_empty() {
+            let left_node = node.borrow_mut().left.root.take().unwrap();
+            if let Some(parent) = node.borrow().parent.upgrade() {
+                left_node.borrow_mut().parent = Rc::downgrade(&parent);
+                if node.borrow().left_to(&parent.borrow()) {
+                    parent.borrow_mut().left.root = Some(left_node);
+                } else {
+                    parent.borrow_mut().right.root = Some(left_node);
+                }
+            } else {
+                left_node.borrow_mut().parent = Weak::new();
+                self.root = Some(left_node);
+            }
+        } else {
+            let mut right_node = node.borrow_mut().right.root.take();
+            right_node.as_mut().unwrap().borrow_mut().parent = Weak::new();
+            let mut right_tree = BinaryTree { root: right_node };
+            let right_min = right_tree.min().unwrap();
+            right_tree.remove(right_min.clone());
+            node.borrow_mut()
+                .left
+                .root
+                .as_mut()
+                .unwrap()
+                .borrow_mut()
+                .parent = Rc::downgrade(&right_min);
+            right_min.borrow_mut().left.root = node.borrow_mut().left.root.take();
+            if let Some(root) = right_tree.root.as_mut() {
+                root.borrow_mut().parent = Rc::downgrade(&right_min);
+            }
+            right_min.borrow_mut().right.root = right_tree.root.take();
+            if let Some(parent) = node.borrow().parent.upgrade() {
+                right_min.borrow_mut().parent = Rc::downgrade(&parent);
+                if node.borrow().left_to(&parent.borrow()) {
+                    parent.borrow_mut().left.root = Some(right_min);
+                } else {
+                    parent.borrow_mut().right.root = Some(right_min);
+                }
+            } else {
+                right_min.borrow_mut().parent = Weak::new();
+                self.root = Some(right_min);
+            }
+        }
+
+        node.borrow_mut().parent = Weak::new();
     }
 
     pub fn find(&self, x: &T) -> Option<Rc<RefCell<TreeNode<T>>>> {
