@@ -4,8 +4,6 @@ use std::{
     rc::{Rc, Weak},
 };
 
-use crate::queue::Queue;
-
 #[derive(Debug)]
 pub struct TreeNode<T> {
     pub value: T,
@@ -13,6 +11,7 @@ pub struct TreeNode<T> {
     pub left: BinaryTree<T>,
     pub right: BinaryTree<T>,
 }
+type TreeNodePtr<T> = Rc<RefCell<TreeNode<T>>>;
 
 impl<T> TreeNode<T> {
     pub fn new(x: T) -> Self {
@@ -38,15 +37,51 @@ impl<T> TreeNode<T> {
     }
 }
 
+impl<T: PartialEq> PartialEq for TreeNode<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.value.eq(&other.value)
+    }
+}
+
+impl<T: PartialOrd> PartialOrd for TreeNode<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.value.partial_cmp(&other.value)
+    }
+}
+
 impl<T: PartialEq + PartialOrd> TreeNode<T> {
-    pub fn left_to(&self, node: &TreeNode<T>) -> bool {
-        self.value.lt(&node.value)
+    pub fn predecessor(node: TreeNodePtr<T>) -> Option<Rc<RefCell<Self>>> {
+        let mut node = node;
+        if !node.borrow().left.is_empty() {
+            node.borrow().left.max()
+        } else {
+            let mut parent = node.borrow().parent.upgrade()?;
+            while node.as_ref() < parent.as_ref() {
+                let next = parent.borrow().parent.upgrade()?;
+                node = std::mem::replace(&mut parent, next);
+            }
+            Some(parent)
+        }
+    }
+
+    pub fn successor(node: TreeNodePtr<T>) -> Option<TreeNodePtr<T>> {
+        let mut node = node;
+        if !node.borrow().right.is_empty() {
+            node.borrow().right.min()
+        } else {
+            let mut parent = node.borrow().parent.upgrade()?;
+            while node.as_ref() >= parent.as_ref() {
+                let next = parent.borrow().parent.upgrade()?;
+                node = std::mem::replace(&mut parent, next);
+            }
+            Some(parent)
+        }
     }
 }
 
 #[derive(Debug)]
 pub struct BinaryTree<T> {
-    pub root: Option<Rc<RefCell<TreeNode<T>>>>,
+    pub root: Option<TreeNodePtr<T>>,
 }
 
 impl<T> Default for BinaryTree<T> {
@@ -67,221 +102,123 @@ impl<T> BinaryTree<T> {
     pub fn clean(&mut self) {
         self.root.take();
     }
-
-    pub fn iter(&self) -> Iter<T> {
-        fn enqueue<T>(queue: &mut Vec<Rc<RefCell<TreeNode<T>>>>, tree: &BinaryTree<T>) {
-            if !tree.is_empty() {
-                unsafe {
-                    enqueue(
-                        queue,
-                        &tree.root.as_ref().unwrap_unchecked().as_ref().borrow().left,
-                    );
-                    Queue::enqueue(queue, tree.root.as_ref().unwrap_unchecked().clone());
-                    enqueue(
-                        queue,
-                        &tree
-                            .root
-                            .as_ref()
-                            .unwrap_unchecked()
-                            .as_ref()
-                            .borrow()
-                            .right,
-                    );
-                }
-            }
-        }
-        let mut queue = Vec::new();
-        enqueue(&mut queue, self);
-
-        Iter(queue)
-    }
 }
 
 impl<T: PartialEq + PartialOrd> BinaryTree<T> {
+    pub fn iter(&self) -> Iter<T> {
+        Iter(self.min())
+    }
+
     pub fn insert(&mut self, x: T) {
-        if self.is_empty() {
-            self.root = TreeNode::new(x).to_root();
-        } else {
-            unsafe {
-                let mut cursor = self.root.as_ref().unwrap_unchecked().clone();
-                loop {
-                    if x < cursor.borrow().value {
-                        if cursor.borrow().left.is_empty() {
-                            cursor.borrow_mut().left.root =
-                                TreeNode::new_leaf(x, Rc::downgrade(&cursor)).to_root();
-                            return;
-                        } else {
-                            let next = cursor
-                                .borrow()
-                                .left
-                                .root
-                                .as_ref()
-                                .unwrap_unchecked()
-                                .clone();
-                            cursor = next;
-                        }
-                    } else if cursor.borrow().right.is_empty() {
-                        cursor.borrow_mut().right.root =
+        if let Some(cursor) = &mut self.root.clone() {
+            loop {
+                if x < cursor.borrow().value {
+                    if cursor.borrow().left.is_empty() {
+                        cursor.borrow_mut().left.root =
                             TreeNode::new_leaf(x, Rc::downgrade(&cursor)).to_root();
                         return;
-                    } else {
-                        let next = cursor
-                            .borrow()
-                            .right
-                            .root
-                            .as_ref()
-                            .unwrap_unchecked()
-                            .clone();
-                        cursor = next;
+                    } else if let Some(next) = cursor.clone().borrow().left.root.clone() {
+                        *cursor = next;
                     }
+                } else if cursor.borrow().right.is_empty() {
+                    cursor.borrow_mut().right.root =
+                        TreeNode::new_leaf(x, Rc::downgrade(&cursor)).to_root();
+                    return;
+                } else if let Some(next) = cursor.clone().borrow().right.root.clone() {
+                    *cursor = next;
                 }
             }
+        } else {
+            self.root = TreeNode::new(x).to_root();
         }
     }
 
-    pub fn remove(&mut self, node: Rc<RefCell<TreeNode<T>>>) {
-        if node.borrow().left.is_empty() {
-            if node.borrow().right.is_empty() {
-                if node.borrow().parent.upgrade().is_some() {
-                    let parent = node.borrow().parent.upgrade().unwrap();
-                    if node.borrow().left_to(&parent.borrow()) {
-                        parent.borrow_mut().left.clean();
-                    } else {
-                        parent.borrow_mut().right.clean();
-                    }
-                } else {
-                    self.clean();
-                }
-            } else {
-                let right_node = node.borrow_mut().right.root.take().unwrap();
-                if let Some(parent) = node.borrow().parent.upgrade() {
-                    right_node.borrow_mut().parent = Rc::downgrade(&parent);
-                    if node.borrow().left_to(&parent.borrow()) {
-                        parent.borrow_mut().left.root = Some(right_node);
-                    } else {
-                        parent.borrow_mut().right.root = Some(right_node);
-                    }
-                } else {
-                    right_node.borrow_mut().parent = Weak::new();
-                    self.root = Some(right_node);
-                }
+    fn detach(&mut self, node: TreeNodePtr<T>, new: Option<TreeNodePtr<T>>) {
+        if let Some(parent) = node.borrow().parent.upgrade() {
+            if let Some(new_node) = &new {
+                new_node.borrow_mut().parent = Rc::downgrade(&parent);
             }
-        } else if node.borrow().right.is_empty() {
-            let left_node = node.borrow_mut().left.root.take().unwrap();
-            if let Some(parent) = node.borrow().parent.upgrade() {
-                left_node.borrow_mut().parent = Rc::downgrade(&parent);
-                if node.borrow().left_to(&parent.borrow()) {
-                    parent.borrow_mut().left.root = Some(left_node);
-                } else {
-                    parent.borrow_mut().right.root = Some(left_node);
-                }
+            if node.as_ref() < parent.as_ref() {
+                parent.borrow_mut().left.root = new;
             } else {
-                left_node.borrow_mut().parent = Weak::new();
-                self.root = Some(left_node);
+                parent.borrow_mut().right.root = new;
             }
         } else {
-            let mut right_node = node.borrow_mut().right.root.take();
-            right_node.as_mut().unwrap().borrow_mut().parent = Weak::new();
-            let mut right_tree = BinaryTree { root: right_node };
-            let right_min = right_tree.min().unwrap();
-            right_tree.remove(right_min.clone());
-            node.borrow_mut()
-                .left
-                .root
-                .as_mut()
-                .unwrap()
-                .borrow_mut()
-                .parent = Rc::downgrade(&right_min);
-            right_min.borrow_mut().left.root = node.borrow_mut().left.root.take();
-            if let Some(root) = right_tree.root.as_mut() {
-                root.borrow_mut().parent = Rc::downgrade(&right_min);
-            }
-            right_min.borrow_mut().right.root = right_tree.root.take();
-            if let Some(parent) = node.borrow().parent.upgrade() {
-                right_min.borrow_mut().parent = Rc::downgrade(&parent);
-                if node.borrow().left_to(&parent.borrow()) {
-                    parent.borrow_mut().left.root = Some(right_min);
-                } else {
-                    parent.borrow_mut().right.root = Some(right_min);
-                }
-            } else {
-                right_min.borrow_mut().parent = Weak::new();
-                self.root = Some(right_min);
-            }
+            self.root = new;
         }
-
         node.borrow_mut().parent = Weak::new();
     }
 
-    pub fn find(&self, x: &T) -> Option<Rc<RefCell<TreeNode<T>>>> {
-        if self.is_empty() {
-            None
+    pub fn remove(&mut self, node: TreeNodePtr<T>) {
+        let left_node = node.borrow_mut().left.root.take();
+        let right_node = node.borrow_mut().right.root.take();
+
+        if let Some(left_node) = left_node {
+            if let Some(right_node) = right_node {
+                right_node.borrow_mut().parent = Weak::new();
+                let mut right_tree = BinaryTree {
+                    root: Some(right_node),
+                };
+                let right_min = unsafe { right_tree.min().unwrap_unchecked() };
+                right_tree.remove(right_min.clone());
+                let right_node = right_tree.root.take();
+
+                left_node.borrow_mut().parent = Rc::downgrade(&right_min);
+                if let Some(node) = &right_node {
+                    node.borrow_mut().parent = Rc::downgrade(&right_min);
+                }
+
+                right_min.borrow_mut().left.root = Some(left_node);
+                right_min.borrow_mut().right.root = right_node;
+
+                self.detach(node, Some(right_min));
+            } else {
+                self.detach(node, Some(left_node));
+            }
+        } else if let Some(right_node) = right_node {
+            self.detach(node, Some(right_node))
         } else {
-            unsafe {
-                let cursor = self.root.as_ref().unwrap_unchecked();
-                if cursor.borrow().value.eq(x) {
-                    Some(cursor.clone())
+            self.detach(node, None)
+        }
+    }
+
+    pub fn find(&self, x: &T) -> Option<TreeNodePtr<T>> {
+        if let Some(root) = &self.root {
+            let mut cursor = root.clone();
+            loop {
+                if &cursor.borrow().value == x {
+                    return Some(cursor);
                 } else {
-                    let left_ret = cursor.borrow().left.find(x);
-                    let right_ret = cursor.borrow().right.find(x);
-                    if left_ret.is_some() {
-                        left_ret
+                    cursor = if &cursor.borrow().value < x {
+                        cursor.borrow().right.root.clone()
                     } else {
-                        right_ret
-                    }
+                        cursor.borrow().left.root.clone()
+                    }?;
                 }
             }
+        } else {
+            return None;
         }
     }
 
-    pub fn min(&self) -> Option<Rc<RefCell<TreeNode<T>>>> {
-        if self.is_empty() {
-            None
-        } else {
-            unsafe {
-                let mut cursor = self.root.as_ref().unwrap_unchecked().clone();
-                loop {
-                    if cursor.borrow().left.is_empty() {
-                        return Some(cursor.clone());
-                    } else {
-                        let next = cursor
-                            .as_ref()
-                            .borrow()
-                            .left
-                            .root
-                            .as_ref()
-                            .unwrap_unchecked()
-                            .clone();
-                        cursor = next;
-                    }
-                }
+    pub fn min(&self) -> Option<TreeNodePtr<T>> {
+        self.root.as_ref().map(|root| {
+            let mut cursor = root.clone();
+            while let Some(left) = cursor.clone().borrow().left.root.clone() {
+                cursor = left;
             }
-        }
+            cursor
+        })
     }
 
-    pub fn max(&self) -> Option<Rc<RefCell<TreeNode<T>>>> {
-        if self.is_empty() {
-            None
-        } else {
-            unsafe {
-                let mut cursor = self.root.as_ref().unwrap_unchecked().clone();
-                loop {
-                    if cursor.borrow().right.is_empty() {
-                        return Some(cursor.clone());
-                    } else {
-                        let next = cursor
-                            .as_ref()
-                            .borrow()
-                            .right
-                            .root
-                            .as_ref()
-                            .unwrap_unchecked()
-                            .clone();
-                        cursor = next;
-                    }
-                }
+    pub fn max(&self) -> Option<TreeNodePtr<T>> {
+        self.root.as_ref().map(|root| {
+            let mut cursor = root.clone();
+            while let Some(left) = cursor.clone().borrow().right.root.clone() {
+                cursor = left;
             }
-        }
+            cursor
+        })
     }
 }
 
@@ -343,12 +280,13 @@ impl<T: Display> Display for BinaryTree<T> {
     }
 }
 
-pub struct Iter<T>(Vec<Rc<RefCell<TreeNode<T>>>>);
+pub struct Iter<T>(Option<TreeNodePtr<T>>);
 
-impl<T> Iterator for Iter<T> {
-    type Item = Rc<RefCell<TreeNode<T>>>;
+impl<T: PartialEq + PartialOrd> Iterator for Iter<T> {
+    type Item = TreeNodePtr<T>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        Queue::dequeue(&mut self.0)
+        let next = TreeNode::successor(self.0.clone()?);
+        std::mem::replace(&mut self.0, next)
     }
 }

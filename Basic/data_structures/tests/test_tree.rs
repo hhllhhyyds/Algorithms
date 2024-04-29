@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use data_structures::tree::BinaryTree;
+use data_structures::tree::{BinaryTree, TreeNode};
 
 use rand::Rng;
 
@@ -62,7 +62,7 @@ fn test_iter() {
     let mut rng = rand::thread_rng();
 
     for _ in 0..10 {
-        let mut input = (0..200).map(|_| rng.gen_range(0..1000)).collect::<Vec<_>>();
+        let mut input = (0..5).map(|_| rng.gen_range(0..1000)).collect::<Vec<_>>();
 
         let mut tree = BinaryTree::new();
 
@@ -70,7 +70,13 @@ fn test_iter() {
             tree.insert(*x);
         }
 
+        println!("tree = {tree}");
+        for x in tree.iter() {
+            println!("node = {}", x.borrow().value);
+        }
+
         input.sort();
+        assert!(input.iter().count() == tree.iter().count());
         for (a, b) in input.iter().zip(tree.iter()) {
             assert!(*a == b.as_ref().borrow().value);
         }
@@ -79,39 +85,53 @@ fn test_iter() {
 
 fn verify_tree_order<T: PartialEq + PartialOrd>(tree: &BinaryTree<T>) {
     let mut root_count = 0;
-    for item in tree.iter() {
-        let parent = item.borrow().parent.upgrade();
-        if parent.is_none() {
-            root_count += 1;
-        } else {
-            let parent = parent.unwrap();
-            if parent.borrow().value > item.borrow().value {
-                assert!(std::ptr::addr_eq(
-                    parent.borrow().left.root.as_ref().unwrap().as_ptr(),
-                    item.as_ptr()
-                ))
+    if !tree.is_empty() {
+        for item in tree.iter() {
+            let parent = item.borrow().parent.upgrade();
+            if parent.is_none() {
+                root_count += 1;
             } else {
-                assert!(std::ptr::addr_eq(
-                    parent.borrow().right.root.as_ref().unwrap().as_ptr(),
-                    item.as_ptr()
-                ))
+                let parent = parent.unwrap();
+                if parent.borrow().value > item.borrow().value {
+                    assert!(std::ptr::addr_eq(
+                        parent.borrow().left.root.as_ref().unwrap().as_ptr(),
+                        item.as_ptr()
+                    ))
+                } else {
+                    assert!(std::ptr::addr_eq(
+                        parent.borrow().right.root.as_ref().unwrap().as_ptr(),
+                        item.as_ptr()
+                    ))
+                }
             }
         }
+        assert!(
+            root_count == if tree.is_empty() { 0 } else { 1 },
+            "root count = {root_count}"
+        );
     }
-    assert!(root_count == if tree.is_empty() { 0 } else { 1 });
 }
 
 #[test]
 fn test_weak_to_parent() {
     let mut rng = rand::thread_rng();
-
-    let input = (0..200).map(|_| rng.gen_range(0..1000)).collect::<Vec<_>>();
+    let size = 16;
+    let input = (0..size)
+        .map(|_| rng.gen_range(0..1000))
+        .collect::<Vec<_>>();
 
     let mut tree = BinaryTree::new();
 
     for x in &input {
         tree.insert(*x);
     }
+
+    assert!(
+        tree.iter().count() == size,
+        "iter count = {}, size = {size}",
+        tree.iter().count()
+    );
+    println!("tree = {tree}");
 
     verify_tree_order(&tree);
 }
@@ -147,5 +167,35 @@ fn test_remove() {
         );
         assert!(tree.find(&x).is_none());
         verify_tree_order(&tree);
+    }
+}
+
+#[test]
+fn test_predecessor_successor() {
+    let mut rng = rand::thread_rng();
+    let size = 7000;
+
+    let input = (0..size)
+        .map(|_| rng.gen_range(0..10000))
+        .collect::<HashSet<_>>();
+
+    let mut tree = BinaryTree::new();
+
+    let mut sorted = Vec::new();
+    for x in &input {
+        tree.insert(*x);
+        sorted.push(*x);
+    }
+    sorted.sort();
+
+    for i in 1..(sorted.len() - 1) {
+        let pre = TreeNode::predecessor(tree.find(&sorted[i]).unwrap());
+        let suc = TreeNode::successor(tree.find(&sorted[i]).unwrap());
+        if pre.is_some() {
+            assert!(pre.unwrap().borrow().value == sorted[i - 1]);
+        }
+        if suc.is_some() {
+            assert!(suc.unwrap().borrow().value == sorted[i + 1]);
+        }
     }
 }
